@@ -1,26 +1,267 @@
-// Función para consumir los datos de la API de Google Sheets en tiempo real
-async function cargarDatosProveedores() {
-  try {
-    const response = await fetch('https://sheetdb.io/api/v1/TU_API_KEY_AQUI');
-    const datosFormulario = await response.json();
+!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard de Cumplimiento de Proveedores</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased p-4 sm:p-6">
+
+  <div class="max-w-7xl mx-auto space-y-6">
     
-    // Formatear los datos recibidos de Google Forms
-    const proveedoresProcesados = datosFormulario.map(item => ({
-      nombre: item['Nombre del Proveedor'] || item['Razón Social'],
-      nit: item['NIT / Identificación'],
-      categoria: item['Categoría / Sector'],
-      rut: item['RUT'] ? '🟢 Cargado' : '🔴 Pendiente',
-      camara: item['Cámara de Comercio'] ? '🟢 Cargado' : '🔴 Pendiente',
-      cotizacion: item['Cotización'] ? '🟢 Cargado' : '🔴 Pendiente',
-      estado: (item['RUT'] && item['Cámara de Comercio'] && item['Cotización']) ? 'Habilitado' : 'En Revisión'
-    }));
+    <!-- Encabezado del Dashboard -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <i data-lucide="shield-check" class="text-indigo-600 w-7 h-7"></i>
+          Monitoreo y Cumplimiento de Proveedores
+        </h1>
+        <p class="text-sm text-slate-500 mt-1">
+          Seguimiento en tiempo real de homologación, carga documental y ofertas comerciales.
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="cargarDatos()" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          Actualizar Datos
+        </button>
+      </div>
+    </div>
 
-    // Renderizar en la tabla e indicadores del Dashboard
-    renderizarDashboard(proveedoresProcesados);
-  } catch (error) {
-    console.error('Error cargando los datos desde Google Forms:', error);
-  }
-}
+    <!-- Tarjetas de Métricas Macro (KPIs) -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-blue-50 text-blue-600 rounded-lg">
+          <i data-lucide="users" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Proveedores</p>
+          <h3 id="kpi-total" class="text-2xl font-bold text-slate-800">0</h3>
+        </div>
+      </div>
 
-// Ejecutar al cargar la página
-document.addEventListener('DOMContentLoaded', cargarDatosProveedores);
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+          <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Habilitados (100%)</p>
+          <h3 id="kpi-habilitados" class="text-2xl font-bold text-emerald-600">0</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-amber-50 text-amber-600 rounded-lg">
+          <i data-lucide="alert-circle" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">En Revisión</p>
+          <h3 id="kpi-revision" class="text-2xl font-bold text-amber-600">0</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-purple-50 text-purple-600 rounded-lg">
+          <i data-lucide="pie-chart" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">% Cumplimiento</p>
+          <h3 id="kpi-porcentaje" class="text-2xl font-bold text-purple-600">0%</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- Barra de Filtros y Búsqueda -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="relative w-full md:w-96">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+        <input 
+          type="text" 
+          id="search-input" 
+          oninput="filtrarTabla()"
+          placeholder="Buscar por Nombre, NIT o Categoría..." 
+          class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+        />
+      </div>
+
+      <div class="flex items-center gap-3 w-full md:w-auto">
+        <select id="filter-estado" onchange="filtrarTabla()" class="w-full md:w-auto border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="TODOS">Todos los Estados</option>
+          <option value="HABILITADO">🟢 Habilitados</option>
+          <option value="REVISION">🟡 En Revisión</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Tabla Principal de Datos -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+              <th class="py-3 px-4">Proveedor / Empresa</th>
+              <th class="py-3 px-4">NIT</th>
+              <th class="py-3 px-4 text-center">Cámara Com.</th>
+              <th class="py-3 px-4 text-center">RUT</th>
+              <th class="py-3 px-4 text-center">Cotización</th>
+              <th class="py-3 px-4">Tiempo Entrega</th>
+              <th class="py-3 px-4">Forma Pago</th>
+              <th class="py-3 px-4 text-center">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body" class="divide-y divide-slate-200 text-sm">
+            <tr>
+              <td colspan="8" class="text-center py-8 text-slate-400">
+                <div class="flex flex-col items-center justify-center gap-2">
+                  <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-indigo-600"></i>
+                  <span>Cargando información del reporte...</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // REEMPLAZA ESTA URL CON TU ENLACE PÚBLICO CSV DE GOOGLE SHEETS
+    const GOOGLE_SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT_REPLACE_WITH_YOUR_CSV_LINK/pub?output=csv';
+
+    // Datos simulados de respaldo basados en los registros de prueba
+    const datosPrueba = [
+      {
+        nombre: 'Soluciones Logísticas Integrales S.A.S.',
+        nit: '901.888.777-4',
+        camara: true,
+        rut: true,
+        cotizacion: true,
+        entrega: '10 Días Hábiles',
+        pago: 'Contado',
+        estado: 'HABILITADO'
+      },
+      {
+        nombre: 'Tech & Cloud Solutions Ltda.',
+        nit: '830.444.555-1',
+        camara: false,
+        rut: true,
+        cotizacion: true,
+        entrega: '5 Días Hábiles',
+        pago: '30 Días',
+        estado: 'REVISION'
+      },
+      {
+        nombre: 'Comercializadora los Andes E.U.',
+        nit: '900.111.222-8',
+        camara: false,
+        rut: false,
+        cotizacion: true,
+        entrega: '15 Días Hábiles',
+        pago: 'Contado',
+        estado: 'REVISION'
+      }
+    ];
+
+    let proveedoresGlobal = [];
+
+    async function cargarDatos() {
+      try {
+        const response = await fetch(GOOGLE_SHEETS_CSV_URL);
+        if (!response.ok) throw new Error('No se pudo obtener la hoja en vivo');
+        const csvText = await response.text();
+        proveedoresGlobal = procesarCSV(csvText);
+      } catch (error) {
+        console.warn('Utilizando datos simulados de respaldo debido a restricción de URL pública:', error);
+        proveedoresGlobal = datosPrueba;
+      }
+      renderizarDashboard(proveedoresGlobal);
+    }
+
+    function procesarCSV(text) {
+      const lineas = text.trim().split('\n');
+      if (lineas.length <= 1) return [];
+
+      return lineas.slice(1).map(linea => {
+        const col = linea.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+
+        const nombre = col[1] ? col[1].replace(/"/g, '').trim() : 'Sin Especificar';
+        const nit = col[2] ? col[2].replace(/"/g, '').trim() : 'N/I';
+        
+        // Detección de URLs de Google Drive en columnas I (8), J (9), K (10)
+        const tieneCamara = col[8] && col[8].includes('http');
+        const tieneRut = col[9] && col[9].includes('http');
+        const tieneCotiz = col[10] && col[10].includes('http');
+        
+        const entrega = col[12] ? col[12].replace(/"/g, '').trim() : 'N/I';
+        const pago = col[13] ? col[13].replace(/"/g, '').trim() : 'N/I';
+
+        const esHabilitado = tieneCamara && tieneRut && tieneCotiz;
+
+        return {
+          nombre,
+          nit,
+          camara: tieneCamara,
+          rut: tieneRut,
+          cotizacion: tieneCotiz,
+          entrega,
+          pago,
+          estado: esHabilitado ? 'HABILITADO' : 'REVISION'
+        };
+      });
+    }
+
+    function renderizarDashboard(lista) {
+      // Actualización de KPIs
+      const total = lista.length;
+      const habilitados = lista.filter(p => p.estado === 'HABILITADO').length;
+      const revision = total - habilitados;
+      const porcentaje = total > 0 ? Math.round((habilitados / total) * 100) : 0;
+
+      document.getElementById('kpi-total').innerText = total;
+      document.getElementById('kpi-habilitados').innerText = habilitados;
+      document.getElementById('kpi-revision').innerText = revision;
+      document.getElementById('kpi-porcentaje').innerText = `${porcentaje}%`;
+
+      // Renderizado de Tabla
+      const tbody = document.getElementById('tabla-body');
+      if (lista.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-400">No se encontraron proveedores que coincidan con la búsqueda.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = lista.map(p => `
+        <tr class="hover:bg-slate-50/80 transition-colors">
+          <td class="py-3.5 px-4 font-medium text-slate-900">${p.nombre}</td>
+          <td class="py-3.5 px-4 text-slate-600 font-mono text-xs">${p.nit}</td>
+          <td class="py-3.5 px-4 text-center">
+            ${p.camara 
+              ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">🟢 Cargado</span>' 
+              : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800">🔴 Faltante</span>'}
+          </td>
+          <td class="py-3.5 px-4 text-center">
+            ${p.rut 
+              ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">🟢 Cargado</span>' 
+              : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800">🔴 Faltante</span>'}
+          </td>
+          <td class="py-3.5 px-4 text-center">
+            ${p.cotizacion 
+              ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">🟢 Cargado</span>' 
+              : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800">🔴 Faltante</span>'}
+          </td>
+          <td class="py-3.5 px-4 text-slate-600">${p.entrega}</td>
+          <td class="py-3.5 px-4 text-slate-600">${p.pago}</td>
+          <td class="py-3.5 px-4 text-center">
+            ${p.estado === 'HABILITADO'
+              ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">🟢 Habilitado</span>'
+              : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">🟡 En Revisión</span>'}
+          </td>
+          
