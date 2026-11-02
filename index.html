@@ -1,0 +1,26 @@
+// Función para consumir los datos de la API de Google Sheets en tiempo real
+async function cargarDatosProveedores() {
+  try {
+    const response = await fetch('https://sheetdb.io/api/v1/TU_API_KEY_AQUI');
+    const datosFormulario = await response.json();
+    
+    // Formatear los datos recibidos de Google Forms
+    const proveedoresProcesados = datosFormulario.map(item => ({
+      nombre: item['Nombre del Proveedor'] || item['Razón Social'],
+      nit: item['NIT / Identificación'],
+      categoria: item['Categoría / Sector'],
+      rut: item['RUT'] ? '🟢 Cargado' : '🔴 Pendiente',
+      camara: item['Cámara de Comercio'] ? '🟢 Cargado' : '🔴 Pendiente',
+      cotizacion: item['Cotización'] ? '🟢 Cargado' : '🔴 Pendiente',
+      estado: (item['RUT'] && item['Cámara de Comercio'] && item['Cotización']) ? 'Habilitado' : 'En Revisión'
+    }));
+
+    // Renderizar en la tabla e indicadores del Dashboard
+    renderizarDashboard(proveedoresProcesados);
+  } catch (error) {
+    console.error('Error cargando los datos desde Google Forms:', error);
+  }
+}
+
+// Ejecutar al cargar la página
+document.addEventListener('DOMContentLoaded', cargarDatosProveedores);
